@@ -146,11 +146,13 @@ class CelerySimpleElasticSearchUpdateIndex(Task):
           'using': [settings.CELERY_SIMPLE_ELASTICSEARCH_DEFAULT_ALIAS],
           'workers': settings.CELERY_SIMPLE_ELASTICSEARCH_COMMAND_WORKERS,
           'verbosity': settings.CELERY_SIMPLE_ELASTICSEARCH_COMMAND_VERBOSITY,
+          'no_input': True,
+          'rebuild': True,
         }
         defaults.update(kwargs)
         if apps is None:
             apps = settings.CELERY_SIMPLE_ELASTICSEARCH_COMMAND_APPS
         # Run the update_index management command
         logger.info("Starting update index")
-        call_command('--rebuild', *apps, **defaults)
+        call_command('es_manage', *apps, **defaults)
         logger.info("Finishing update index")
