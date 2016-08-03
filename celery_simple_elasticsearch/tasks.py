@@ -1,8 +1,8 @@
+from celery.utils.log import get_task_logger
+from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
-from django.db.models.loading import get_model
-from django.utils.importlib import import_module
-from celery.utils.log import get_task_logger
+from importlib import import_module
 
 from .conf import settings
 
@@ -67,7 +67,7 @@ class CelerySimpleElasticSearchSignalHandler(Task):
         bits = object_path.split('.')
         app_name = '.'.join(bits[:-1])
         classname = bits[-1]
-        model_class = get_model(app_name, classname)
+        model_class = apps.get_model(app_name, classname)
 
         if model_class is None:
             raise ImproperlyConfigured("Could not load model '%s'." %
