@@ -1,24 +1,58 @@
 from celery.utils.log import get_task_logger
 from django.apps import apps
+from django.db import transaction
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from importlib import import_module
 
 from .conf import settings
 
-if settings.CELERY_SIMPLE_ELASTICSEARCH_TRANSACTION_SAFE \
-   and not getattr(settings, 'CELERY_ALWAYS_EAGER', False):
-    from djcelery_transactions import PostTransactionTask as Task
-else:
-    from celery.task import Task  # noqa
+from celery import current_app, Task
 
 logger = get_task_logger(__name__)
+
+
+def _get_celery_settings(setting, default=False):
+    """ Returns CELERY setting
+    :param setting:
+    :param default:
+    :return:
+    """
+    return any(getattr(obj, setting, default)
+               for obj in (current_app.conf, settings))
 
 
 class CelerySimpleElasticSearchSignalHandler(Task):
     using = settings.CELERY_SIMPLE_ELASTICSEARCH_DEFAULT_ALIAS
     max_retries = settings.CELERY_SIMPLE_ELASTICSEARCH_MAX_RETRIES
     default_retry_delay = settings.CELERY_SIMPLE_ELASTICSEARCH_RETRY_DELAY
+
+    def original_apply_async(self, *args, **kwargs):
+        """Shortcut method to reach real implementation
+        of celery.Task.apply_sync
+        """
+        return super(
+            CelerySimpleElasticSearchSignalHandler, self
+        ).apply_async(*args, **kwargs)
+
+    def apply_async(self, *args, **kwargs):
+        # Delay the task unless the client requested otherwise or transactions
+        # aren't being managed (i.e. the signal handlers won't send the task).
+
+        celery_eager = _get_celery_settings('CELERY_ALWAYS_EAGER')
+
+        # New setting to run eager task post transaction
+        # defaults to `not CELERY_ALWAYS_EAGER`
+        eager_transaction = _get_celery_settings('CELERY_EAGER_TRANSACTION',
+                                                 not celery_eager)
+
+        connection = transaction.get_connection()
+        if connection.in_atomic_block and eager_transaction:
+            transaction.on_commit(
+                lambda: self.original_apply_async(*args, **kwargs)
+            )
+        else:
+            return self.original_apply_async(*args, **kwargs)
 
     def split_identifier(self, identifier, **kwargs):
         """
