@@ -29,7 +29,7 @@ class CelerySimpleElasticSearchSignalHandler(Task):
 
     def original_apply_async(self, *args, **kwargs):
         """Shortcut method to reach real implementation
-        of celery.Task.apply_sync
+        of celery.Task.apply_async
         """
         return super(
             CelerySimpleElasticSearchSignalHandler, self
